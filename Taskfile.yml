@@ -1,0 +1,227 @@
+version: "3"
+
+# Load environment variables from .env file
+dotenv: [".env"]
+
+vars:
+  DOCKER_COMPOSE_FILE: docker-compose.yml
+  DB_URL: "{{.DATABASE_URL}}"
+
+tasks:
+  # =====================================================
+  # INFRASTRUCTURE COMMANDS
+  # =====================================================
+
+  up:
+    desc: Start the database and services
+    cmd: docker-compose -f {{.DOCKER_COMPOSE_FILE}} up -d
+
+  down:
+    desc: Stop all services and remove containers
+    cmd: docker-compose -f {{.DOCKER_COMPOSE_FILE}} down
+
+  logs:
+    desc: Show logs from all services
+    cmd: docker-compose -f {{.DOCKER_COMPOSE_FILE}} logs -f
+
+  logs:postgres:
+    desc: Show PostgreSQL logs
+    cmd: docker-compose -f {{.DOCKER_COMPOSE_FILE}} logs -f postgres
+
+  restart:
+    desc: Restart all services
+    cmds:
+      - task: down
+      - task: up
+
+  clean:
+    desc: "Stop services and remove volumes (WARNING: This will delete all data)"
+    cmd: docker-compose -f {{.DOCKER_COMPOSE_FILE}} down -v
+
+  # =====================================================
+  # DUAL DATABASE STRATEGY: PRISMA ORM + TYPED SQL
+  # =====================================================
+
+  prisma:install:
+    desc: Install Prisma dependencies
+    cmd: npm install
+
+  prisma:generate:
+    desc: Generate Prisma client
+    cmd: npm run db:generate
+    deps: [db:wait]
+
+  prisma:pull:
+    desc: Pull schema from database to Prisma
+    cmd: npm run db:pull
+    deps: [db:wait]
+
+  prisma:pull:gen:
+    desc: Pull schema and generate client (Dual DB Strategy)
+    cmd: npm run prisma:pull:gen
+    deps: [db:wait]
+
+  prisma:studio:
+    desc: Open Prisma Studio
+    cmd: npm run db:studio
+    deps: [db:wait]
+
+  sql:generate:
+    desc: Generate typed SQL functions
+    cmd: npm run sql:generate
+    deps: [db:wait, prisma:generate]
+
+  # =====================================================
+  # DATABASE SCHEMA MANAGEMENT (ATLAS)
+  # =====================================================
+
+  migrate:apply:
+    desc: Apply schema migrations using Atlas
+    cmd: atlas schema apply --env local --auto-approve
+    deps: [db:wait]
+
+  migrate:apply:confirm:
+    desc: Apply schema migrations with confirmation
+    cmd: atlas schema apply --env local
+    deps: [db:wait]
+
+  migrate:diff:
+    desc: Generate migration diff
+    cmd: atlas migrate diff --env local
+    deps: [db:wait]
+
+  migrate:status:
+    desc: Show migration status
+    cmd: atlas migrate status --env local
+    deps: [db:wait]
+
+  schema:inspect:
+    desc: Inspect current database schema
+    cmd: atlas schema inspect --env local
+    deps: [db:wait]
+
+  schema:clean:
+    desc: Clean/reset database schema
+    cmd: atlas schema clean --env local --auto-approve
+    deps: [db:wait]
+
+  schema:validate:
+    desc: Validate schema file
+    cmd: atlas schema validate --env local
+
+  # =====================================================
+  # DATABASE ACCESS
+  # =====================================================
+
+  db:shell:
+    desc: Connect to PostgreSQL shell
+    cmd: docker exec -it database-essentials-postgres psql -U root -d practice
+    deps: [db:wait]
+
+  db:wait:
+    desc: Wait for database to be ready
+    cmd: |
+      echo "Waiting for database to be ready..."
+      timeout 30 bash -c 'until docker exec database-essentials-postgres pg_isready -U root -d practice; do sleep 1; done'
+      echo "Database is ready!"
+    silent: true
+
+  db:seed:
+    desc: Load seed data into database
+    cmd: docker exec -i database-essentials-postgres psql -U root -d practice < database/fixtures/seed-simple.sql
+    deps: [db:wait]
+
+  db:reset:
+    desc: Reset database with fresh schema and seed data
+    cmds:
+      - task: schema:clean
+      - task: migrate:apply
+      - task: db:seed
+    deps: [db:wait]
+
+  # =====================================================
+  # DEVELOPMENT UTILITIES
+  # =====================================================
+
+  dev:setup:
+    desc: Complete development setup
+    cmds:
+      - task: up
+      - task: db:wait
+      - task: migrate:apply
+      - task: db:seed
+      - echo "Development environment is ready!"
+
+  dev:setup:dual:
+    desc: Complete setup with Dual Database Strategy
+    cmds:
+      - task: up
+      - task: db:wait
+      - task: migrate:apply
+      - task: db:seed
+      - task: prisma:install
+      - task: prisma:pull:gen
+      - task: sql:generate
+      - echo "Dual Database Strategy setup complete!"
+
+  dev:status:
+    desc: Show status of all services
+    cmd: docker-compose -f {{.DOCKER_COMPOSE_FILE}} ps
+
+  dev:stats:
+    desc: Show container resource usage
+    cmd: docker stats database-essentials-postgres database-essentials-adminer --no-stream
+
+  # =====================================================
+  # TESTING
+  # =====================================================
+
+  test:connection:
+    desc: Test database connection
+    cmd: |
+      docker exec database-essentials-postgres psql -U root -d practice -c "SELECT version();"
+      echo "Database connection successful"
+    deps: [db:wait]
+
+  test:schema:
+    desc: Test schema by running basic queries
+    cmd: |
+      docker exec database-essentials-postgres psql -U root -d practice -c "
+      SET search_path TO practice_app;
+      SELECT 'Companies: ' || COUNT(*)::text FROM company;
+      SELECT 'Users: ' || COUNT(*)::text FROM users;
+      "
+    deps: [db:wait]
+
+  test:dual:
+    desc: Test Dual Database Strategy
+    cmd: npm run dev
+    deps: [db:wait, prisma:generate]
+
+  # =====================================================
+  # INFORMATION
+  # =====================================================
+
+  info:
+    desc: Show environment information
+    cmd: |
+      echo "Practice Database Environment"
+      echo "Database URL: {{.DB_URL}}"
+      echo "Adminer URL: http://localhost:28080"
+      echo "Docker Compose File: {{.DOCKER_COMPOSE_FILE}}"
+      echo ""
+      echo "Dual Database Strategy"
+      echo "1. SQL Schema: database/schema/schema.sql (single source of truth)"
+      echo "2. Atlas: Apply schema changes to database"
+      echo "3. Prisma: Pull schema from database and generate types"
+      echo "4. Typed SQL: prisma/sql/*.sql for complex queries"
+      echo ""
+      echo "Available Commands"
+      echo "Infrastructure: up, down, restart, logs, clean"
+      echo "Dual DB: prisma:pull:gen, sql:generate, prisma:studio"
+      echo "Schema: migrate:apply, schema:clean, schema:inspect"
+      echo "Database: db:shell, db:seed, db:reset"
+      echo "Development: dev:setup, dev:setup:dual, dev:status"
+      echo "Testing: test:connection, test:schema, test:dual"
+      echo ""
+      echo "Quick start: task dev:setup:dual"

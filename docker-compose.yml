@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15.4-alpine
+    container_name: database-essentials-postgres
+    environment:
+      POSTGRES_DB: practice
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "25433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d practice"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - database-network
+
+  adminer:
+    image: adminer:latest
+    container_name: database-essentials-adminer
+    ports:
+      - "28080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - database-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  database-network:
+    driver: bridge

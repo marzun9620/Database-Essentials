@@ -1,0 +1,238 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["typedSql"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model account_daily_metrics {
+  id                String         @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id        String         @db.Uuid
+  social_account_id String         @db.Uuid
+  metric_date       DateTime       @db.Date
+  followers_count   BigInt?        @default(0)
+  following_count   BigInt?        @default(0)
+  posts_count       BigInt?        @default(0)
+  engagement_rate   Decimal?       @default(0.0000) @db.Decimal(5, 4)
+  reach_count       BigInt?        @default(0)
+  impression_count  BigInt?        @default(0)
+  created_at        DateTime?      @default(now()) @db.Timestamptz(6)
+  company           company        @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  social_account    social_account @relation(fields: [social_account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([id, metric_date])
+  @@unique([social_account_id, metric_date], map: "unique_account_date")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model company {
+  id                    String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                  String                  @db.VarChar(255)
+  slug                  String                  @unique @db.VarChar(100)
+  status                String?                 @default("ACTIVE") @db.VarChar(20)
+  created_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  account_daily_metrics account_daily_metrics[]
+  content_daily_metrics content_daily_metrics[]
+  generated_report      generated_report[]
+  report_template       report_template[]
+  social_account        social_account[]
+  user_role             user_role[]
+  users                 users[]
+}
+
+model content_daily_metrics {
+  id                String            @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id        String            @db.Uuid
+  content_id        String            @db.Uuid
+  metric_date       DateTime          @db.Date
+  views_count       BigInt?           @default(0)
+  likes_count       BigInt?           @default(0)
+  shares_count      BigInt?           @default(0)
+  comments_count    BigInt?           @default(0)
+  engagement_rate   Decimal?          @default(0.0000) @db.Decimal(5, 4)
+  created_at        DateTime?         @default(now()) @db.Timestamptz(6)
+  company           company           @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  content_dimension content_dimension @relation(fields: [content_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([id, metric_date])
+  @@unique([content_id, metric_date], map: "unique_content_date")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model content_dimension {
+  id                    String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  social_account_id     String                  @db.Uuid
+  external_content_id   String                  @db.VarChar(255)
+  content_type          String                  @db.VarChar(50)
+  title                 String?
+  description           String?
+  thumbnail_url         String?
+  content_url           String?
+  published_at          DateTime?               @db.Timestamptz(6)
+  metadata              Json?                   @default("{}")
+  created_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  content_daily_metrics content_daily_metrics[]
+  social_account        social_account          @relation(fields: [social_account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([social_account_id, external_content_id], map: "unique_account_content")
+  @@index([published_at], map: "idx_content_dimension_published_at")
+  @@index([social_account_id], map: "idx_content_dimension_social_account_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model generated_report {
+  id              String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id      String           @db.Uuid
+  template_id     String?          @db.Uuid
+  title           String           @db.VarChar(255)
+  report_type     String           @db.VarChar(50)
+  period_start    DateTime         @db.Date
+  period_end      DateTime         @db.Date
+  status          String?          @default("PENDING") @db.VarChar(20)
+  file_url        String?
+  file_size       BigInt?
+  generated_by    String?          @db.Uuid
+  created_at      DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?        @default(now()) @db.Timestamptz(6)
+  company         company          @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users?           @relation(fields: [generated_by], references: [id], onUpdate: NoAction)
+  report_template report_template? @relation(fields: [template_id], references: [id], onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_generated_report_company_id")
+  @@index([created_at], map: "idx_generated_report_created_at")
+  @@index([status], map: "idx_generated_report_status")
+}
+
+model password {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String    @unique(map: "unique_user_password") @db.Uuid
+  hash       String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model permission {
+  id              String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name            String            @unique @db.VarChar(100)
+  description     String?
+  resource        String            @db.VarChar(100)
+  action          String            @db.VarChar(50)
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  role_permission role_permission[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model report_template {
+  id               String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id       String             @db.Uuid
+  name             String             @db.VarChar(255)
+  description      String?
+  template_type    String             @db.VarChar(50)
+  config           Json               @default("{}")
+  is_active        Boolean?           @default(true)
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  generated_report generated_report[]
+  company          company            @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_report_template_company_id")
+}
+
+model role_permission {
+  id            String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  role          String     @db.VarChar(50)
+  permission_id String     @db.Uuid
+  created_at    DateTime?  @default(now()) @db.Timestamptz(6)
+  permission    permission @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([role, permission_id], map: "unique_role_permission")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model session {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String    @db.Uuid
+  expires_at DateTime  @db.Timestamptz(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "idx_session_expires_at")
+  @@index([user_id], map: "idx_session_user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model social_account {
+  id                    String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String                  @db.Uuid
+  platform              String                  @db.VarChar(50)
+  external_id           String                  @db.VarChar(255)
+  username              String?                 @db.VarChar(255)
+  display_name          String?                 @db.VarChar(255)
+  avatar_url            String?
+  status                String?                 @default("ACTIVE") @db.VarChar(20)
+  metadata              Json?                   @default("{}")
+  created_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  account_daily_metrics account_daily_metrics[]
+  content_dimension     content_dimension[]
+  company               company                 @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  social_token          social_token?
+
+  @@unique([platform, external_id], map: "unique_platform_external_id")
+  @@index([company_id], map: "idx_social_account_company_id")
+  @@index([platform], map: "idx_social_account_platform")
+  @@index([status], map: "idx_social_account_status")
+}
+
+model social_token {
+  id                String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  social_account_id String         @unique(map: "unique_account_token") @db.Uuid
+  access_token      String
+  refresh_token     String?
+  token_type        String?        @default("Bearer") @db.VarChar(50)
+  expires_at        DateTime?      @db.Timestamptz(6)
+  scope             String?
+  created_at        DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?      @default(now()) @db.Timestamptz(6)
+  social_account    social_account @relation(fields: [social_account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_role {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String    @db.Uuid
+  company_id String    @db.Uuid
+  role       String    @db.VarChar(50)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  company    company   @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, company_id], map: "unique_user_company_role")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  id               String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id       String             @db.Uuid
+  email            String             @unique @db.VarChar(255)
+  first_name       String             @db.VarChar(100)
+  last_name        String             @db.VarChar(100)
+  status           String?            @default("INVITED") @db.VarChar(20)
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  generated_report generated_report[]
+  password         password?
+  session          session[]
+  user_role        user_role[]
+  company          company            @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_users_company_id")
+  @@index([email], map: "idx_users_email")
+  @@index([status], map: "idx_users_status")
+}

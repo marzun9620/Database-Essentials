@@ -1,0 +1,72 @@
+{
+  "name": "database-essentials",
+  "version": "1.0.0",
+  "description": "A comprehensive database practice environment with PostgreSQL, Prisma ORM, and Atlas migrations",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "db:generate": "prisma generate",
+    "db:pull": "prisma db pull",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset",
+    "db:status": "prisma migrate status",
+    "db:validate": "prisma validate",
+    "prisma:pull:gen": "prisma db pull && prisma generate",
+    "sql:generate": "prisma generate",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "postgresql",
+    "prisma",
+    "atlas",
+    "database",
+    "migrations",
+    "orm",
+    "typescript",
+    "docker",
+    "multi-tenant",
+    "analytics"
+  ],
+  "author": {
+    "name": "Database Essentials Team",
+    "email": "team@database-essentials.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/database-essentials.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/database-essentials/issues"
+  },
+  "homepage": "https://github.com/your-username/database-essentials#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.0",
+    "prisma": "^6.10.1",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
